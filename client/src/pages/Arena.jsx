@@ -15,8 +15,10 @@ export const Arena = () => {
     try {
       const res = await API.get('/api/matchup');
       setPair(res.data.pair);
-      setActiveItemId(res.data.pair[0]._id);
-      loadComments(res.data.pair[0]._id);
+      if (res.data.pair && res.data.pair.length > 0) {
+        setActiveItemId(res.data.pair[0]._id);
+        loadComments(res.data.pair[0]._id);
+      }
     } catch (err) {
       console.error('Matchup query error:', err);
     } finally {
@@ -48,7 +50,7 @@ export const Arena = () => {
 
   const handleCommentSubmit = async (e) => {
     e.preventDefault();
-    if (!commentText.trim()) return;
+    if (!commentText.trim() || !activeItemId) return;
     try {
       await API.post('/api/comments', {
         itemId: activeItemId,
@@ -71,7 +73,7 @@ export const Arena = () => {
     );
   }
 
-  if (pair.length < 2) {
+  if (!pair || pair.length < 2) {
     return (
       <div className="flex flex-col h-96 items-center justify-center text-center p-6">
         <h2 className="text-xl font-semibold text-neutral-200 mb-2">Insufficient Benchmark Assets</h2>
@@ -123,7 +125,6 @@ export const Arena = () => {
         })}
       </div>
 
-      {/* Guest Critique Section */}
       <div className="border-t border-neutral-900 pt-8 max-w-2xl mx-auto">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-neutral-400 mb-4 font-mono">
           Guest Critique Stream (Active Filter Enabled)

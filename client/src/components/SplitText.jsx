@@ -2,16 +2,14 @@ import React from 'react';
 
 export const SplitText = ({ text = '', className = '' }) => {
   return (
-    <h1 className={`inline-block overflow-hidden font-bold tracking-tight ${className}`}>
+    <span className={`inline-block font-bold tracking-tight ${className}`}>
       {text.split('').map((char, index) => (
-        <span
-          key={index}
-          className="inline-block animate-fade-in-up transition-transform duration-300 hover:-translate-y-0.5"
-          style={{ animationDelay: `${index * 20}ms` }}
-        >
+        <span key={index} className="inline-block transition-transform duration-200 hover:-translate-y-0.5">
           {char === ' ' ? '\u00A0' : char}
         </span>
       ))}
-    </h1>
+    </span>
   );
 };
+
+export default SplitText;
