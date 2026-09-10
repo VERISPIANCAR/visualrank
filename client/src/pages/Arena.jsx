@@ -2,19 +2,39 @@ import React, { useState, useEffect } from 'react';
 import API from '../api/client';
 import { SpotlightCard } from '../components/SpotlightCard';
 import { SplitText } from '../components/SplitText';
+import { AuthModal } from '../components/AuthModal';
 
-export const Arena = () => {
+export const Arena = ({ onNavigateLeaderboard }) => {
   const [pair, setPair] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeItemId, setActiveItemId] = useState(null);
   const [commentText, setCommentText] = useState('');
   const [comments, setComments] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
+  const fetchSessionUser = async () => {
+    const token = localStorage.getItem('visualrank_token');
+    if (!token) {
+      setCurrentUser(null);
+      return;
+    }
+    try {
+      const res = await API.get('/api/auth/me');
+      setCurrentUser(res.data);
+      localStorage.setItem('visualrank_user', JSON.stringify(res.data));
+    } catch {
+      localStorage.removeItem('visualrank_token');
+      localStorage.removeItem('visualrank_user');
+      setCurrentUser(null);
+    }
+  };
 
   const loadPair = async () => {
     setLoading(true);
     try {
       const res = await API.get('/api/matchup');
-      setPair(res.data.pair);
+      setPair(res.data.pair || []);
       if (res.data.pair && res.data.pair.length > 0) {
         setActiveItemId(res.data.pair[0]._id);
         loadComments(res.data.pair[0]._id);
@@ -36,15 +56,30 @@ export const Arena = () => {
   };
 
   useEffect(() => {
+    fetchSessionUser();
     loadPair();
   }, []);
 
   const handleVote = async (winnerId, loserId) => {
+    if (!currentUser) {
+      setShowAuthModal(true);
+      return;
+    }
+
     try {
-      await API.post('/api/vote', { winnerId, loserId });
-      loadPair();
+      const res = await API.post('/api/vote', { winnerId, loserId });
+      if (currentUser.role === 'voter') {
+        setCurrentUser((prev) => ({
+          ...prev,
+          canVote: res.data.canVote,
+          hasVoted: res.data.hasVoted
+        }));
+      } else {
+        loadPair();
+      }
     } catch (err) {
-      console.error('Failed to register vote:', err);
+      alert(err.response?.data?.error || 'Failed to submit vote.');
+      fetchSessionUser();
     }
   };
 
@@ -56,7 +91,7 @@ export const Arena = () => {
         itemId: activeItemId,
         content: commentText,
         rating: 5,
-        username: 'Guest Reviewer'
+        username: currentUser ? currentUser.username : 'Guest Reviewer'
       });
       setCommentText('');
       loadComments(activeItemId);
@@ -64,6 +99,34 @@ export const Arena = () => {
       console.error('Failed to post critique:', err);
     }
   };
+
+  // Voter Lockout Screen
+  if (currentUser && currentUser.role === 'voter' && !currentUser.canVote) {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-20 text-center">
+        <div className="w-16 h-16 bg-indigo-950/50 border border-indigo-700/60 rounded-full flex items-center justify-center mx-auto mb-6 text-indigo-400 text-2xl font-mono">
+          ✓
+        </div>
+        <h2 className="text-2xl sm:text-3xl font-bold text-neutral-100 mb-3">Vote Recorded</h2>
+        <p className="text-neutral-400 text-sm mb-6 leading-relaxed">
+          Your evaluation has been computed into the dynamic Elo model. Per platform protocol, each registered voter is limited to one matchup per benchmark round.
+        </p>
+        <div className="bg-neutral-900 border border-neutral-800 p-4 rounded-xl mb-8">
+          <p className="text-xs font-mono text-neutral-400">
+            Account Status: <span className="text-rose-400 font-semibold">Locked</span> (Awaiting administrator authorization for subsequent iterations)
+          </p>
+        </div>
+        {onNavigateLeaderboard && (
+          <button
+            onClick={onNavigateLeaderboard}
+            className="bg-neutral-100 hover:bg-neutral-200 text-neutral-950 font-medium px-6 py-2.5 rounded-lg text-sm transition"
+          >
+            Review Global Leaderboard
+          </button>
+        )}
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -78,7 +141,7 @@ export const Arena = () => {
       <div className="flex flex-col h-96 items-center justify-center text-center p-6">
         <h2 className="text-xl font-semibold text-neutral-200 mb-2">Insufficient Benchmark Assets</h2>
         <p className="text-neutral-400 text-sm max-w-md mb-4 font-mono">
-          The pairwise matchmaking engine requires at least 2 active images. Log in via the Admin Portal to upload assets.
+          The pairwise engine requires at least 2 active assets. Log in via Admin Portal to upload candidates.
         </p>
       </div>
     );
@@ -86,11 +149,27 @@ export const Arena = () => {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onAuthSuccess={(user) => setCurrentUser(user)}
+      />
+
       <div className="text-center mb-10">
         <SplitText text="Visual Consensus Arena" className="text-3xl sm:text-4xl text-neutral-100 mb-2" />
         <p className="text-neutral-400 text-xs sm:text-sm font-mono">
           Decentralized visual evaluation via pairwise dynamic Elo rating convergence.
         </p>
+        {!currentUser && (
+          <div className="mt-4">
+            <button
+              onClick={() => setShowAuthModal(true)}
+              className="bg-indigo-600/20 border border-indigo-500/40 hover:bg-indigo-600/30 text-indigo-300 text-xs px-4 py-1.5 rounded-full font-mono transition"
+            >
+              Sign In to Vote
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
@@ -164,3 +243,5 @@ export const Arena = () => {
     </div>
   );
 };
+
+export default Arena;
